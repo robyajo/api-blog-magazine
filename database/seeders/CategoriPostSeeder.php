@@ -17,17 +17,17 @@ class CategoriPostSeeder extends Seeder
         CategoriPost::create([
             'id' => 1,
             'uuid' => '123e4567-e89b-12d3-a456-426614174000',
-            'name' => 'Thể thao',
+            'name' => 'Category 1',
             'user_id' => 1,
-            'slug' => 'the-thao',
+            'slug' => 'category-1',
             'status' => 'active',
         ]);
         CategoriPost::create([
             'id' => 2,
             'uuid' => '123e4567-e89b-12d3-a456-426614174001',
-            'name' => 'Khoa học',
+            'name' => 'Category 2',
             'user_id' => 1,
-            'slug' => 'khoa-hoc',
+            'slug' => 'category-2',
             'status' => 'active',
         ]);
     }

@@ -37,6 +37,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
         });
         Route::prefix('post')->controller(PostController::class)->group(function () {
             Route::get('index', 'index');
+            Route::post('store', 'store');
+            Route::post('delete-many', 'destroyMany');
         });
         Route::prefix('comment')->controller(CommentController::class)->group(function () {
             Route::get('index', 'index');

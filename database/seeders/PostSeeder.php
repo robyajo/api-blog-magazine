@@ -5,74 +5,63 @@ namespace Database\Seeders;
 use App\Models\Post;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Schema;
 
 class PostSeeder extends Seeder
 {
     /**
      * Run the database seeds.
      */
+
     public function run(): void
     {
-        Post::create([
-            'id' => 1,
-            'uuid' => '123e4567-e89b-12d3-a456-426614174000',
-            'user_id' => 1,
-            'categori_id' => 1,
-            'name' => 'Bài viết 1',
-            'slug' => 'bai-viet-1',
-            'image' => 'image.jpg',
-            'image_url' => 'https://example.com/image.jpg',
-            'status' => 'published',
-            'views' => 100,
-            'likes' => 50,
-            'dislikes' => 10,
-            'comments' => 20,
-            'shares' => 15,
-            'favorites' => 10,
-            'tags' => 'tag1,tag2',
-            'content' => 'Nội dung bài viết 1',
-            'description' => 'Mô tả bài viết 1',
-        ]);
+        ini_set('memory_limit', '512M');
+        set_time_limit(0);
+        DB::connection()->disableQueryLog();
+        Schema::disableForeignKeyConstraints();
+        DB::table('posts')->truncate();
+        Schema::enableForeignKeyConstraints();
 
-        Post::create([
-            'id' => 2,
-            'uuid' => '123e4567-e89b-12d3-a456-426614174001',
-            'user_id' => 1,
-            'categori_id' => 1,
-            'name' => 'Bài viết 2',
-            'slug' => 'bai-viet-2',
-            'image' => 'image.jpg',
-            'image_url' => 'https://example.com/image.jpg',
-            'status' => 'published',
-            'views' => 100,
-            'likes' => 50,
-            'dislikes' => 10,
-            'comments' => 20,
-            'shares' => 15,
-            'favorites' => 10,
-            'tags' => 'tag1,tag2',
-            'content' => 'Nội dung bài viết 2',
-            'description' => 'Mô tả bài viết 2',
-        ]);
-        Post::create([
-            'id' => 3,
-            'uuid' => '123e4567-e89b-12d3-a456-426614174002',
-            'user_id' => 1,
-            'categori_id' => 2,
-            'name' => 'Bài viết 3',
-            'slug' => 'bai-viet-3',
-            'image' => 'image.jpg',
-            'image_url' => 'https://example.com/image.jpg',
-            'status' => 'published',
-            'views' => 100,
-            'likes' => 50,
-            'dislikes' => 10,
-            'comments' => 20,
-            'shares' => 15,
-            'favorites' => 10,
-            'tags' => 'tag1,tag2',
-            'content' => 'Nội dung bài viết 3',
-            'description' => 'Mô tả bài viết 3',
-        ]);
+        $img1 = 'https://images.unsplash.com/photo-1495020689067-958852a7765e?q=80&w=1169&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
+        $img2 = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
+        $total = 1000000;
+        $batchSize = 500;
+        $batch = [];
+
+        for ($i = 1; $i <= $total; $i++) {
+            $name = 'Generated Post ' . $i;
+            $batch[] = [
+                'uuid' => (string) Str::uuid(),
+                'user_id' => 1,
+                'categori_id' => 2,
+                'name' => $name,
+                'slug' => Str::slug($name),
+                'image' => null,
+                'image_url' => $i % 2 === 0 ? $img1 : $img2,
+                'status' => 'published',
+                'views' => 0,
+                'likes' => 0,
+                'dislikes' => 0,
+                'comments' => 0,
+                'shares' => 0,
+                'favorites' => 0,
+                'tags' => 'tag1,tag2',
+                'content' => 'Generated content for ' . $name,
+                'description' => 'Generated description for ' . $name,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+
+            if (count($batch) === $batchSize) {
+                DB::table('posts')->insert($batch);
+                $batch = [];
+            }
+        }
+
+        if (!empty($batch)) {
+            DB::table('posts')->insert($batch);
+        }
     }
 }

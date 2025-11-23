@@ -62,14 +62,7 @@ class PostController extends Controller
             $posts = $query->paginate($perPage, ['*'], 'page', $page);
 
             $formattedPosts = collect($posts->items())->map(function ($post) {
-                return [
-                    'id' => $post->id,
-                    'name' => $post->name ?? null,
-                    'content' => $post->content ?? null,
-                    'categori' => $post->categori ?? null,
-                    'created_at' => $post->created_at,
-                    'updated_at' => $post->updated_at,
-                ];
+                return $this->formatResponse($post);
             });
 
             $links = [
@@ -178,7 +171,7 @@ class PostController extends Controller
     {
         try {
             $auth = Auth::user();
-            $post = Post::where('user_id', $auth->id)
+            $post = Post::where('uuid', $id)
                 ->with('categori')
                 ->find($id);
             if (!$post) {
@@ -204,7 +197,7 @@ class PostController extends Controller
     {
         try {
             $auth = Auth::user();
-            $post = Post::where('user_id', $auth->id)->find($id);
+            $post = Post::where('uuid', $id)->find($id);
             if (!$post) {
                 return response()->json([
                     'message' => 'Post not found',
@@ -288,5 +281,78 @@ class PostController extends Controller
                 'message' => 'Server error: ' . $th->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Bulk delete posts by IDs belonging to the authenticated user
+     */
+    public function destroyMany(Request $request)
+    {
+        try {
+            $auth = Auth::user();
+
+            $validated = $request->validate([
+                'ids' => 'required|array|min:1',
+                'ids.*' => 'integer',
+            ]);
+
+            $ids = $validated['ids'];
+
+            $query = Post::where('user_id', $auth->id)
+                ->whereIn('id', $ids);
+
+            $existingCount = $query->count();
+            if ($existingCount === 0) {
+                return response()->json([
+                    'message' => 'No posts found to delete',
+                    'deleted' => 0,
+                    'requested' => count($ids),
+                ], 404);
+            }
+
+            $deleted = $query->delete();
+
+            return response()->json([
+                'message' => 'Posts deleted successfully',
+                'deleted' => $deleted,
+                'requested' => count($ids),
+            ], 200);
+        } catch (\Illuminate\Validation\ValidationException $ve) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $ve->errors(),
+            ], 422);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'message' => 'Server error: ' . $th->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function formatResponse($data)
+    {
+
+        return [
+            'id' => $data->id,
+            'uuid' => $data->uuid,
+            'user_id' => $data->user_id,
+            'categori_id' => $data->categori_id,
+            'name' => $data->name,
+            'slug' => $data->slug,
+            'image' => $data->image,
+            'image_url' => $data->image_url,
+            'status' => $data->status,
+            'views' => $data->views,
+            'likes' => $data->likes,
+            'dislikes' => $data->dislikes,
+            'comments' => $data->comments,
+            'shares' => $data->shares,
+            'favorites' => $data->favorites,
+            'tags' => $data->tags,
+            'content' => $data->content,
+            'description' => $data->description,
+            'created_at' => $data->created_at,
+            'updated_at' => $data->updated_at,
+        ];
     }
 }

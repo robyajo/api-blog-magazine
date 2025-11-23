@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('slug')->unique();
             $table->string('image')->nullable();
-            $table->string('image_url')->nullable();
+            $table->text('image_url')->nullable();
             $table->enum('status', ['draft', 'published'])->default('draft');
             $table->string('views')->default(0);
             $table->string('likes')->default(0);
