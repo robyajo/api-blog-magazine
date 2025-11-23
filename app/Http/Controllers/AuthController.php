@@ -10,9 +10,62 @@ use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
+    /**
+     * Check if user session is active
+     *
+     * @return JsonResponse
+     */
+    public function session()
+    {
+        try {
+            /** @var \App\Models\User $user */
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json([
+                    'authenticated' => false
+                ], 401);
+            }
+
+            return response()->json([
+                'data' => [
+                    'authenticated' => true
+                ]
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'data' => [
+                    'authenticated' => false,
+                    'message' => 'Server error: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Refresh authentication token
+     *
+     * @return JsonResponse
+     */
+    public function refresh()
+    {
+        try {
+            $token = Auth::refresh();
+            return response()->json([
+                'access_token' => $token,
+                'token_type' => 'Bearer',
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Failed to refresh token: ' . $e->getMessage()], 500);
+        }
+    }
 
     /**
      * Register a new user.
+     * @unauthenticated
+     * 
+     * @param Request $request
+     * @return JsonResponse
      */
     public function register(Request $request)
     {
@@ -47,6 +100,10 @@ class AuthController extends Controller
 
     /**
      * Login user and create token.
+     * @unauthenticated
+     * 
+     * @param Request $request
+     * @return JsonResponse
      */
     public function login(Request $request)
     {
@@ -86,9 +143,55 @@ class AuthController extends Controller
             'data' => $user,
         ], 200);
     }
-
     /**
-     * Get the authenticated user.
+     * Forgot password
+     * @unauthenticated
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function forgotPassword(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|exists:users,email',
+            'password' => 'required|min:8|confirmed',
+        ], [
+            'email.required' => 'Email is required.',
+            'email.email' => 'Email format is invalid.',
+            'email.exists' => 'Email is not registered.',
+            'password.required' => 'Password is required.',
+            'password.min' => 'Password must be at least 8 characters.',
+            'password.confirmed' => 'Password confirmation does not match.',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()->toArray(),
+            ], 422);
+        }
+
+        try {
+            $user = User::where('email', $request->email)->first();
+
+
+            $user->update([
+                'password' => Hash::make($request->password),
+            ]);
+
+            return response()->json([
+                'message' => 'Password updated successfully',
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Server error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    /**
+     * Get authenticated user data
+     *
+     * @return JsonResponse
      */
     public function me()
     {
@@ -107,7 +210,9 @@ class AuthController extends Controller
     }
 
     /**
-     * Logout user (revoke the token).
+     * Logout user
+     *
+     * @return JsonResponse
      */
     public function logout(Request $request)
     {

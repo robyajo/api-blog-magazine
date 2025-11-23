@@ -12,15 +12,33 @@ class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
-
-
-
     protected $fillable = [
+        'id',
+        'uuid',
         'name',
+        'avatar',
+        'avatar_url',
         'email',
         'password',
         'role',
     ];
+
+    public function categories()
+    {
+        return $this->hasMany(CategoriPost::class);
+    }
+    public function posts()
+    {
+        return $this->hasMany(Post::class);
+    }
+    public function comments()
+    {
+        return $this->hasMany(Comment::class);
+    }
+
+
+
+
     protected $hidden = [
         'password',
         'remember_token',

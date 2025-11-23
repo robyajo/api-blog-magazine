@@ -1,7 +1,10 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CategoriController;
+use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DummyController;
+use App\Http\Controllers\PostController;
 use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -16,10 +19,27 @@ Route::prefix('dummy')->controller(DummyController::class)->group(function () {
     Route::get('posts', 'dummyPosts');
     Route::get('posts/{id}', 'dummyPostsId');
 });
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/logout', [AuthController::class, 'logout']);
-    Route::get('/user', function (Request $request) {
-        return $request->user();
+Route::middleware(['auth:sanctum', 'verified'])->group(function () {
+    Route::controller(AuthController::class)->group(function () {
+        Route::post('logout', 'logout');
+        Route::get('permission', 'permission');
+        Route::get('session', 'session');
+        Route::post('forgot-password', 'forgotPassword');
+        Route::post('refresh', 'refresh');
+        Route::get('me', 'me');
     });
-    Route::get('/users', [UserController::class, 'index']);
+    Route::prefix('admin')->group(function () {
+        Route::prefix('user')->controller(UserController::class)->group(function () {
+            Route::get('index', 'index');
+        });
+        Route::prefix('categori')->controller(CategoriController::class)->group(function () {
+            Route::get('index', 'index');
+        });
+        Route::prefix('post')->controller(PostController::class)->group(function () {
+            Route::get('index', 'index');
+        });
+        Route::prefix('comment')->controller(CommentController::class)->group(function () {
+            Route::get('index', 'index');
+        });
+    });
 });

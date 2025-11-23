@@ -6,38 +6,28 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Post extends Model
+class Comment extends Model
 {
     use HasFactory, SoftDeletes;
-    protected $table = 'posts';
+    //
+    protected $table = 'comments';
     protected $fillable = [
         'id',
         'uuid',
         'user_id',
-        'categori_id',
+        'post_id',
         'name',
-        'slug',
-        'image',
-        'image_url',
-        'status',
-        'views',
-        'likes',
-        'dislikes',
-        'comments',
-        'shares',
-        'favorites',
-        'tags',
+        'email',
+        'phone',
+        'media',
         'content',
-        'description',
     ];
-
     public function user()
     {
         return $this->belongsTo(User::class);
     }
-
-    public function categori()
+    public function post()
     {
-        return $this->belongsTo(CategoriPost::class);
+        return $this->belongsTo(Post::class);
     }
 }
