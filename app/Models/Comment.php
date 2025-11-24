@@ -9,8 +9,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Comment extends Model
 {
     use HasFactory, SoftDeletes;
+
     //
     protected $table = 'comments';
+
     protected $fillable = [
         'id',
         'uuid',
@@ -22,12 +24,25 @@ class Comment extends Model
         'media',
         'content',
     ];
+
     public function user()
     {
         return $this->belongsTo(User::class);
     }
+
     public function post()
     {
         return $this->belongsTo(Post::class);
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) str()->uuid();
+            }
+        });
     }
 }

@@ -6,7 +6,6 @@ use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DummyController;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\UserController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -30,14 +29,27 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     });
     Route::prefix('admin')->group(function () {
         Route::prefix('user')->controller(UserController::class)->group(function () {
-            Route::get('index', 'index');
+            Route::get('/', 'index');
+            Route::post('store', 'store');
+            Route::get('show/{uuid}', 'show');
+            Route::post('update/{uuid}', 'update');
+            Route::post('update-avatar/{uuid}', 'updateAvatar');
+            Route::delete('delete/{uuid}', 'destroy');
+            Route::post('update-password/{uuid}', 'updatePassword');
         });
         Route::prefix('categori')->controller(CategoriController::class)->group(function () {
-            Route::get('index', 'index');
+            Route::get('/', 'index');
+            Route::post('store', 'store');
+            Route::get('show/{uuid}', 'show');
+            Route::post('update/{uuid}', 'update');
+            Route::delete('delete/{uuid}', 'destroy');
         });
         Route::prefix('post')->controller(PostController::class)->group(function () {
-            Route::get('index', 'index');
+            Route::get('/', 'index');
             Route::post('store', 'store');
+            Route::get('show/{uuid}', 'show');
+            Route::post('update/{uuid}', 'update');
+            Route::delete('delete/{uuid}', 'destroy');
             Route::post('delete-many', 'destroyMany');
         });
         Route::prefix('comment')->controller(CommentController::class)->group(function () {

@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Comment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Validator;
 
 class CommentController extends Controller
 {
@@ -32,10 +32,10 @@ class CommentController extends Controller
             $allowedSortFields = ['id', 'name', 'email', 'created_at', 'updated_at'];
             $allowedSortOrders = ['asc', 'desc'];
 
-            if (!in_array($sortBy, $allowedSortFields)) {
+            if (! in_array($sortBy, $allowedSortFields)) {
                 $sortBy = 'id';
             }
-            if (!in_array($sortOrder, $allowedSortOrders)) {
+            if (! in_array($sortOrder, $allowedSortOrders)) {
                 $sortOrder = 'desc';
             }
 
@@ -47,9 +47,9 @@ class CommentController extends Controller
                 $query->where('name', $name);
             } elseif ($search) {
                 $query->where(function ($q) use ($search) {
-                    $q->where('name', 'LIKE', '%' . $search . '%')
-                        ->orWhere('email', 'LIKE', '%' . $search . '%')
-                        ->orWhere('content', 'LIKE', '%' . $search . '%');
+                    $q->where('name', 'LIKE', '%'.$search.'%')
+                        ->orWhere('email', 'LIKE', '%'.$search.'%')
+                        ->orWhere('content', 'LIKE', '%'.$search.'%');
                 });
             }
 
@@ -65,19 +65,7 @@ class CommentController extends Controller
             $comments = $query->paginate($perPage, ['*'], 'page', $page);
 
             $formattedComments = collect($comments->items())->map(function ($comment) {
-                return [
-                    'id' => $comment->id,
-                    'uuid' => $comment->uuid,
-                    'post_id' => $comment->post_id,
-                    'name' => $comment->name,
-                    'email' => $comment->email,
-                    'phone' => $comment->phone,
-                    'media' => $comment->media,
-                    'content' => $comment->content,
-                    'post' => $comment->post,
-                    'created_at' => $comment->created_at,
-                    'updated_at' => $comment->updated_at,
-                ];
+                return $this->formatResponse($comment);
             });
 
             $links = [
@@ -126,7 +114,7 @@ class CommentController extends Controller
             ], 200);
         } catch (\Throwable $th) {
             return response()->json([
-                'message' => 'Server error: ' . $th->getMessage(),
+                'message' => 'Server error: '.$th->getMessage(),
             ], 500);
         }
     }
@@ -138,38 +126,41 @@ class CommentController extends Controller
     {
         try {
             $auth = Auth::user();
-            $validated = $request->validate([
-                'post_id' => 'required|integer|exists:posts,id',
-                'name' => 'required|string|max:255',
-                'email' => 'required|email',
-                'phone' => 'nullable|string|max:50',
-                'media' => 'nullable|string',
-                'content' => 'required|string',
-            ]);
+            $validator = Validator::make(
+                $request->all(),
+                [
+                    'post_id' => 'required|integer|exists:posts,id',
+                    'name' => 'required|string|max:255',
+                    'email' => 'required|email',
+                    'phone' => 'nullable|string|max:50',
+                    'media' => 'nullable|string',
+                    'content' => 'required|string',
+                ]
+            );
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()->toArray(),
+                ], 422);
+            }
 
             $comment = Comment::create([
-                'uuid' => (string) Str::uuid(),
                 'user_id' => $auth->id,
-                'post_id' => $validated['post_id'],
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'phone' => $validated['phone'] ?? null,
-                'media' => $validated['media'] ?? null,
-                'content' => $validated['content'],
+                'post_id' => $request->post_id,
+                'name' => $request->name,
+                'email' => $request->email,
+                'phone' => $request->phone ?? null,
+                'media' => $request->media ?? null,
+                'content' => $request->content,
             ]);
 
             return response()->json([
                 'message' => 'Comment created successfully',
-                'data' => $comment,
+                'data' => $this->formatResponse($comment),
             ], 201);
-        } catch (\Illuminate\Validation\ValidationException $ve) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $ve->errors(),
-            ], 422);
         } catch (\Throwable $th) {
             return response()->json([
-                'message' => 'Server error: ' . $th->getMessage(),
+                'message' => 'Server error: '.$th->getMessage(),
             ], 500);
         }
     }
@@ -177,25 +168,26 @@ class CommentController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(string $uuid)
     {
         try {
             $auth = Auth::user();
-            $comment = Comment::where('user_id', $auth->id)
+            $comment = Comment::where('uuid', $uuid)
                 ->with('post')
-                ->find($id);
-            if (!$comment) {
+                ->first();
+            if (! $comment) {
                 return response()->json([
                     'message' => 'Comment not found',
                 ], 404);
             }
+
             return response()->json([
                 'message' => 'Comment fetched successfully',
-                'data' => $comment,
+                'data' => $this->formatResponse($comment),
             ], 200);
         } catch (\Throwable $th) {
             return response()->json([
-                'message' => 'Server error: ' . $th->getMessage(),
+                'message' => 'Server error: '.$th->getMessage(),
             ], 500);
         }
     }
@@ -203,50 +195,46 @@ class CommentController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, string $uuid)
     {
         try {
             $auth = Auth::user();
-            $comment = Comment::where('user_id', $auth->id)->find($id);
-            if (!$comment) {
+            $comment = Comment::where('uuid', $uuid)->first();
+            if (! $comment) {
                 return response()->json([
                     'message' => 'Comment not found',
                 ], 404);
             }
+            $validator = Validator::make(
+                $request->all(),
+                [
+                    'post_id' => 'sometimes|required|integer|exists:posts,id',
+                    'name' => 'sometimes|required|string|max:255',
+                    'email' => 'sometimes|required|email',
+                    'phone' => 'nullable|string|max:50',
+                    'media' => 'nullable|string',
+                    'content' => 'sometimes|required|string',
+                ]
+            );
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()->toArray(),
+                ], 422);
+            }
 
-            $validated = $request->validate([
-                'post_id' => 'sometimes|required|integer|exists:posts,id',
-                'name' => 'sometimes|required|string|max:255',
-                'email' => 'sometimes|required|email',
-                'phone' => 'nullable|string|max:50',
-                'media' => 'nullable|string',
-                'content' => 'sometimes|required|string',
+            $comment->update([
+                'post_id' => $request->post_id,
+                'name' => $request->name,
+                'email' => $request->email,
+                'phone' => $request->phone,
+                'media' => $request->media,
+                'content' => $request->content,
             ]);
-
-            if (array_key_exists('post_id', $validated)) {
-                $comment->post_id = $validated['post_id'];
-            }
-            if (array_key_exists('name', $validated)) {
-                $comment->name = $validated['name'];
-            }
-            if (array_key_exists('email', $validated)) {
-                $comment->email = $validated['email'];
-            }
-            if (array_key_exists('phone', $validated)) {
-                $comment->phone = $validated['phone'];
-            }
-            if (array_key_exists('media', $validated)) {
-                $comment->media = $validated['media'];
-            }
-            if (array_key_exists('content', $validated)) {
-                $comment->content = $validated['content'];
-            }
-
-            $comment->save();
 
             return response()->json([
                 'message' => 'Comment updated successfully',
-                'data' => $comment,
+                'data' => $this->formatResponse($comment),
             ], 200);
         } catch (\Illuminate\Validation\ValidationException $ve) {
             return response()->json([
@@ -255,7 +243,7 @@ class CommentController extends Controller
             ], 422);
         } catch (\Throwable $th) {
             return response()->json([
-                'message' => 'Server error: ' . $th->getMessage(),
+                'message' => 'Server error: '.$th->getMessage(),
             ], 500);
         }
     }
@@ -263,24 +251,43 @@ class CommentController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(string $uuid)
     {
         try {
             $auth = Auth::user();
-            $comment = Comment::where('user_id', $auth->id)->find($id);
-            if (!$comment) {
+            $comment = Comment::where('uuid', $uuid)->first();
+            if (! $comment) {
                 return response()->json([
                     'message' => 'Comment not found',
                 ], 404);
             }
             $comment->delete();
+
             return response()->json([
                 'message' => 'Comment deleted successfully',
             ], 200);
         } catch (\Throwable $th) {
             return response()->json([
-                'message' => 'Server error: ' . $th->getMessage(),
+                'message' => 'Server error: '.$th->getMessage(),
             ], 500);
         }
+    }
+
+    private function formatResponse($data)
+    {
+
+        return [
+            'id' => $data->id,
+            'uuid' => $data->uuid,
+            'post_id' => $data->post_id,
+            'name' => $data->name,
+            'email' => $data->email,
+            'phone' => $data->phone,
+            'media' => $data->media,
+            'content' => $data->content,
+            'post' => $data->post,
+            'created_at' => $data->created_at,
+            'updated_at' => $data->updated_at,
+        ];
     }
 }

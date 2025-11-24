@@ -5,17 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\Validator;
+use Intervention\Image\Laravel\Facades\Image;
 
 class UserController extends Controller
 {
     /**
      * Display a listing of the resource.
+     *
      *  * @return JsonResponse
-     * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function index(Request $request)
@@ -29,18 +30,18 @@ class UserController extends Controller
             $role = $request->query('role');
 
             // Ordering parameters
-            $sortBy = $request->query('sort_by', 'id'); // Default sort by id
+            $sortBy = $request->query('sort_by', 'created_at');
             $sortOrder = $request->query('sort_order', 'desc'); // Default desc
 
             // Validate sort parameters
             $allowedSortFields = ['id', 'name', 'email', 'created_at', 'updated_at'];
             $allowedSortOrders = ['asc', 'desc'];
 
-            if (!in_array($sortBy, $allowedSortFields)) {
-                $sortBy = 'id';
+            if (! in_array($sortBy, $allowedSortFields)) {
+                $sortBy = 'created_at';
             }
 
-            if (!in_array(strtolower($sortOrder), $allowedSortOrders)) {
+            if (! in_array(strtolower($sortOrder), $allowedSortOrders)) {
                 $sortOrder = 'desc';
             }
 
@@ -66,16 +67,14 @@ class UserController extends Controller
 
             // Apply ordering
             $query->orderBy($sortBy, $sortOrder);
+            $query->orderBy('id', $sortOrder);
 
-            // Paginate with custom page
             $users = $query->paginate($perPage, ['*'], 'page', $page);
 
             // Format users data
             $formattedUsers = collect($users->items())->map(function ($user) {
-                return $this->formatUserResponse($user);
+                return $this->formatResponse($user);
             });
-
-
 
             if ($name) {
                 $activityProperties['name'] = $name;
@@ -97,7 +96,6 @@ class UserController extends Controller
                 $activityProperties['sort_by'] = $sortBy;
                 $activityProperties['sort_order'] = $sortOrder;
             }
-
 
             // Build links for pagination
             $links = [
@@ -153,13 +151,24 @@ class UserController extends Controller
 
     /**
      * Store a newly created resource in storage.
+     * 
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
      */
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:8|confirmed',
+            'password' => 'required|string|min:6|confirmed',
+        ], [
+            'name.required' => 'The name field is required.',
+            'email.required' => 'The email field is required.',
+            'email.email' => 'The email field must be a valid email address.',
+            'email.unique' => 'The email address has already been taken.',
+            'password.required' => 'The password field is required.',
+            'password.confirmed' => 'The password confirmation does not match.',
+            'password.min' => 'The password must be at least 6 characters.',
         ]);
 
         if ($validator->fails()) {
@@ -168,46 +177,52 @@ class UserController extends Controller
                 'errors' => $validator->errors()->toArray(),
             ], 422);
         }
-        $validated = $validator->validated();
 
         $user = User::create([
-            'uuid' => (string) Str::uuid(),
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
+            'name' => $request->name,
+            'email' => $request->email,
+            'role' => $request->role ?? 'user',
+            'password' => Hash::make($request->password),
         ]);
-
 
         return response()->json([
             'message' => 'User created successfully',
-            'data' => $user,
+            'data' => $this->formatResponse($user),
         ], 201);
     }
 
     /**
      * Display the specified resource.
+     * 
+     * @param  string  $uuid
+     * @return \Illuminate\Http\Response
      */
-    public function show(string $id)
+    public function show(string $uuid)
     {
-        $user = User::find($id);
-        if (!$user) {
+        $user = User::where('uuid', $uuid)->first();
+        if (! $user) {
             return response()->json([
                 'message' => 'User not found',
             ], 404);
         }
+
         return response()->json([
             'message' => 'User fetched successfully',
-            'data' => $user,
+            'data' => $this->formatResponse($user),
         ], 200);
     }
 
     /**
      * Update the specified resource in storage.
+     * 
+     * @param  \Illuminate\Http\Request  $request
+     * @param  string  $uuid
+     * @return \Illuminate\Http\Response
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, string $uuid)
     {
-        $user = User::find($id);
-        if (!$user) {
+        $user = User::where('uuid', $uuid)->first();
+        if (! $user) {
             return response()->json([
                 'message' => 'User not found',
             ], 404);
@@ -215,11 +230,13 @@ class UserController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:255',
-            'email' => ['sometimes', 'required', 'email', Rule::unique('users', 'email')->ignore($id)],
-            'password' => 'nullable|string|min:8|confirmed',
+            'email' => ['sometimes', 'required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => 'sometimes|in:admin,user',
-            'avatar' => 'nullable|string',
-            'avatar_url' => 'nullable|string',
+        ], [
+            'name.required' => 'The name field is required.',
+            'email.required' => 'The email field is required.',
+            'email.email' => 'The email field must be a valid email address.',
+            'email.unique' => 'The email address has already been taken.',
         ]);
 
         if ($validator->fails()) {
@@ -240,13 +257,10 @@ class UserController extends Controller
         if (array_key_exists('role', $validated)) {
             $user->role = $validated['role'];
         }
-        if (array_key_exists('avatar', $validated)) {
-            $user->avatar = $validated['avatar'];
-        }
         if (array_key_exists('avatar_url', $validated)) {
             $user->avatar_url = $validated['avatar_url'];
         }
-        if (!empty($validated['password'])) {
+        if (! empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
         }
 
@@ -254,28 +268,144 @@ class UserController extends Controller
 
         return response()->json([
             'message' => 'User updated successfully',
-            'data' => $user,
+            'data' => $this->formatResponse($user),
         ], 200);
     }
 
     /**
      * Remove the specified resource from storage.
+     * 
+     * @param  string  $uuid
+     * @return \Illuminate\Http\Response
      */
-    public function destroy(string $id)
+    public function destroy(string $uuid)
     {
-        $user = User::find($id);
-        if (!$user) {
+        $user = User::where('uuid', $uuid)->first();
+        if (! $user) {
             return response()->json([
                 'message' => 'User not found',
             ], 404);
         }
         $user->delete();
+
         return response()->json([
             'message' => 'User deleted successfully',
         ], 200);
     }
 
-    private function formatUserResponse($user)
+    /**
+     * Update the password of the specified resource in storage.
+     * 
+     * @param  \Illuminate\Http\Request  $request
+     * @param  string  $uuid
+     * @return \Illuminate\Http\Response
+     */
+    public function updatePassword(Request $request, string $uuid)
+    {
+        $user = User::where('uuid', $uuid)->first();
+        if (! $user) {
+            return response()->json([
+                'message' => 'User not found',
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'current_password' => 'required|string',
+            'password' => 'required|string|min:6|confirmed',
+        ], [
+            'current_password.required' => 'The current password field is required.',
+            'password.required' => 'The password field is required.',
+            'password.min' => 'The password must be at least 6 characters.',
+            'password.confirmed' => 'The password confirmation does not match.',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()->toArray(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        if (array_key_exists('current_password', $validated)) {
+            if (! Hash::check($validated['current_password'], $user->password)) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => [
+                        'current_password' => ['Current password is incorrect']
+                    ]
+                ], 422);
+            }
+        }
+
+        $user->password = Hash::make($validated['password']);
+        $user->save();
+
+        return response()->json([
+            'message' => 'Password updated successfully',
+            'data' => $this->formatResponse($user),
+        ], 200);
+    }
+
+    /**
+     * Update the avatar of the specified resource in storage.
+     * 
+     * @param  \Illuminate\Http\Request  $request
+     * @param  string  $uuid
+     * @return \Illuminate\Http\Response
+     */
+    public function updateAvatar(Request $request, string $uuid)
+    {
+        try {
+            $user = User::where('uuid', $uuid)->first();
+            if (! $user) {
+                return response()->json([
+                    'message' => 'User not found',
+                ], 404);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'avatar' => 'required|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            ]);
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()->toArray(),
+                ], 422);
+            }
+
+            Storage::disk('public')->makeDirectory('images/user');
+            Storage::disk('public')->makeDirectory('images/user/thumbnail');
+            if (! empty($user->avatar)) {
+                Storage::disk('public')->delete('images/user/' . $user->avatar);
+                Storage::disk('public')->delete('images/user/thumbnail/' . $user->avatar);
+            }
+            $imageName = time() . '_' . uniqid() . '.' . $request->file('avatar')->extension();
+            $original = file_get_contents($request->file('avatar')->getRealPath());
+            Storage::disk('public')->put('images/user/' . $imageName, $original);
+            $img = Image::read($request->file('avatar')->getRealPath());
+            $img->resize(300, 300, function ($constraint) {
+                $constraint->aspectRatio();
+                $constraint->upsize();
+            });
+            Storage::disk('public')->put('images/user/thumbnail/' . $imageName, $img->encode());
+            $user->avatar = $imageName;
+            $user->avatar_url = 'images/user/' . $imageName;
+            $user->save();
+
+            return response()->json([
+                'message' => 'Avatar updated successfully',
+                'data' => $this->formatResponse($user),
+            ], 200);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'message' => 'Server error: ' . $th->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function formatResponse($user)
     {
         return [
             'id' => $user->id,
@@ -284,7 +414,13 @@ class UserController extends Controller
             'email' => $user->email,
             'role' => $user->role,
             'avatar' => $user->avatar,
-            'avatar_url' => $user->avatar_url,
+            'avatar_url' => $user->avatar
+                ? asset('storage/images/user/' . $user->avatar)
+                : (! empty($user->avatar_url)
+                    ? (Str::startsWith($user->avatar_url, ['http://', 'https://'])
+                        ? $user->avatar_url
+                        : asset('storage/' . $user->avatar_url))
+                    : null),
             'email_verified_at' => $user->email_verified_at,
             'created_at' => $user->created_at,
             'updated_at' => $user->updated_at,

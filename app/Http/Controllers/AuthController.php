@@ -21,23 +21,23 @@ class AuthController extends Controller
             /** @var \App\Models\User $user */
             $user = Auth::user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
-                    'authenticated' => false
+                    'authenticated' => false,
                 ], 401);
             }
 
             return response()->json([
                 'data' => [
-                    'authenticated' => true
-                ]
+                    'authenticated' => true,
+                ],
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
                 'data' => [
                     'authenticated' => false,
-                    'message' => 'Server error: ' . $e->getMessage()
-                ]
+                    'message' => 'Server error: '.$e->getMessage(),
+                ],
             ], 500);
         }
     }
@@ -51,20 +51,21 @@ class AuthController extends Controller
     {
         try {
             $token = Auth::refresh();
+
             return response()->json([
                 'access_token' => $token,
                 'token_type' => 'Bearer',
             ], 200);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Failed to refresh token: ' . $e->getMessage()], 500);
+            return response()->json(['message' => 'Failed to refresh token: '.$e->getMessage()], 500);
         }
     }
 
     /**
      * Register a new user.
+     *
      * @unauthenticated
-     * 
-     * @param Request $request
+     *
      * @return JsonResponse
      */
     public function register(Request $request)
@@ -100,9 +101,9 @@ class AuthController extends Controller
 
     /**
      * Login user and create token.
+     *
      * @unauthenticated
-     * 
-     * @param Request $request
+     *
      * @return JsonResponse
      */
     public function login(Request $request)
@@ -121,18 +122,18 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'message' => 'Authentication failed',
-                'errors' => ['email' => ['This email is not registered. Please sign up first.']]
+                'errors' => ['email' => ['This email is not registered. Please sign up first.']],
             ], 404);
         }
 
         // Email ada, cek password
-        if (!Hash::check($request->password, $user->password)) {
+        if (! Hash::check($request->password, $user->password)) {
             return response()->json([
                 'message' => 'Authentication failed',
-                'errors' => ['password' => ['Password is incorrect.']]
+                'errors' => ['password' => ['Password is incorrect.']],
             ], 401);
         }
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -143,11 +144,12 @@ class AuthController extends Controller
             'data' => $user,
         ], 200);
     }
+
     /**
      * Forgot password
+     *
      * @unauthenticated
      *
-     * @param Request $request
      * @return JsonResponse
      */
     public function forgotPassword(Request $request)
@@ -174,7 +176,6 @@ class AuthController extends Controller
         try {
             $user = User::where('email', $request->email)->first();
 
-
             $user->update([
                 'password' => Hash::make($request->password),
             ]);
@@ -184,10 +185,11 @@ class AuthController extends Controller
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
-                'message' => 'Server error: ' . $e->getMessage()
+                'message' => 'Server error: '.$e->getMessage(),
             ], 500);
         }
     }
+
     /**
      * Get authenticated user data
      *
@@ -197,9 +199,9 @@ class AuthController extends Controller
     {
         $authUser = Auth::user();
 
-        if (!$authUser) {
+        if (! $authUser) {
             return response()->json([
-                'message' => 'User not found'
+                'message' => 'User not found',
             ], 404);
         }
 

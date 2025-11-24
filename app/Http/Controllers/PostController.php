@@ -5,6 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Post;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Intervention\Image\Laravel\Facades\Image;
 
 class PostController extends Controller
 {
@@ -24,16 +28,16 @@ class PostController extends Controller
             $page = (int) $request->query('page', 1);
             $category = $request->query('category');
 
-            $sortBy = $request->query('sort_by', 'id');
+            $sortBy = $request->query('sort_by', 'created_at');
             $sortOrder = strtolower($request->query('sort_order', 'desc'));
 
             $allowedSortFields = ['id', 'name', 'created_at', 'updated_at'];
             $allowedSortOrders = ['asc', 'desc'];
 
-            if (!in_array($sortBy, $allowedSortFields)) {
-                $sortBy = 'id';
+            if (! in_array($sortBy, $allowedSortFields)) {
+                $sortBy = 'created_at';
             }
-            if (!in_array($sortOrder, $allowedSortOrders)) {
+            if (! in_array($sortOrder, $allowedSortOrders)) {
                 $sortOrder = 'desc';
             }
 
@@ -45,9 +49,9 @@ class PostController extends Controller
                 $query->where('name', $title);
             } elseif ($search) {
                 $query->where(function ($q) use ($search) {
-                    $q->where('name', 'LIKE', '%' . $search . '%')
-                        ->orWhere('content', 'LIKE', '%' . $search . '%')
-                        ->orWhere('description', 'LIKE', '%' . $search . '%');
+                    $q->where('name', 'LIKE', '%'.$search.'%')
+                        ->orWhere('content', 'LIKE', '%'.$search.'%')
+                        ->orWhere('description', 'LIKE', '%'.$search.'%');
                 });
             }
 
@@ -110,7 +114,7 @@ class PostController extends Controller
             ], 200);
         } catch (\Throwable $th) {
             return response()->json([
-                'message' => 'Server error: ' . $th->getMessage(),
+                'message' => 'Server error: '.$th->getMessage(),
             ], 500);
         }
     }
@@ -123,43 +127,58 @@ class PostController extends Controller
         try {
             $auth = Auth::user();
 
-            $validated = $request->validate([
+            $validated = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'content' => 'required|string',
                 'description' => 'nullable|string',
-                'categori_id' => 'nullable|integer|exists:categori_posts,id',
-                'image' => 'nullable|string',
+                'categori_id' => 'required|integer|exists:categori_posts,id',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
                 'image_url' => 'nullable|string',
                 'status' => 'nullable|in:draft,published,archived',
                 'tags' => 'nullable|string',
             ]);
+            if ($validated->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => $validated->errors()->toArray(),
+                ], 422);
+            }
 
+            $uploadedImagePath = null;
+            if ($request->hasFile('image')) {
+                Storage::disk('public')->makeDirectory('images/post');
+                Storage::disk('public')->makeDirectory('images/post/thumbnail');
+                $imageName = time().'_'.uniqid().'.'.$request->file('image')->extension();
+                $original = file_get_contents($request->file('image')->getRealPath());
+                Storage::disk('public')->put('images/post/'.$imageName, $original);
+                $img = Image::read($request->file('image')->getRealPath());
+                $img->resize(300, 200, function ($constraint) {
+                    $constraint->aspectRatio();
+                    $constraint->upsize();
+                });
+                Storage::disk('public')->put('images/post/thumbnail/'.$imageName, $img->encode());
+                $uploadedImagePath = 'images/post/'.$imageName;
+            }
             $post = Post::create([
-                'uuid' => (string) \Illuminate\Support\Str::uuid(),
                 'user_id' => $auth->id,
-                'categori_id' => $validated['categori_id'] ?? null,
-                'name' => $validated['name'],
-                'slug' => \Illuminate\Support\Str::slug($validated['name']),
-                'image' => $validated['image'] ?? null,
-                'image_url' => $validated['image_url'] ?? null,
-                'status' => $validated['status'] ?? 'draft',
-                'tags' => $validated['tags'] ?? null,
-                'content' => $validated['content'],
-                'description' => $validated['description'] ?? null,
+                'categori_id' => $request->categori_id,
+                'name' => $request->name,
+                'slug' => Str::slug($request->name),
+                'image' => $uploadedImagePath ? basename($uploadedImagePath) : ($request->image),
+                'image_url' => $uploadedImagePath ?? ($request->image_url),
+                'status' => $request->status ?? 'draft',
+                'tags' => $request->tags,
+                'content' => $request->content,
+                'description' => $request->description,
             ]);
 
             return response()->json([
                 'message' => 'Post created successfully',
                 'data' => $post,
             ], 201);
-        } catch (\Illuminate\Validation\ValidationException $ve) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $ve->errors(),
-            ], 422);
         } catch (\Throwable $th) {
             return response()->json([
-                'message' => 'Server error: ' . $th->getMessage(),
+                'message' => 'Server error: '.$th->getMessage(),
             ], 500);
         }
     }
@@ -167,25 +186,25 @@ class PostController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(string $uuid)
     {
         try {
-            $auth = Auth::user();
-            $post = Post::where('uuid', $id)
+            $post = Post::where('uuid', $uuid)
                 ->with('categori')
-                ->find($id);
-            if (!$post) {
+                ->first();
+            if (! $post) {
                 return response()->json([
                     'message' => 'Post not found',
                 ], 404);
             }
+
             return response()->json([
                 'message' => 'Post fetched successfully',
-                'data' => $post,
+                'data' => $this->formatResponse($post),
             ], 200);
         } catch (\Throwable $th) {
             return response()->json([
-                'message' => 'Server error: ' . $th->getMessage(),
+                'message' => 'Server error: '.$th->getMessage(),
             ], 500);
         }
     }
@@ -193,68 +212,72 @@ class PostController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, string $uuid)
     {
         try {
-            $auth = Auth::user();
-            $post = Post::where('uuid', $id)->find($id);
-            if (!$post) {
+            $post = Post::where('uuid', $uuid)->first();
+            if (! $post) {
                 return response()->json([
                     'message' => 'Post not found',
                 ], 404);
             }
 
-            $validated = $request->validate([
+            $validated = Validator::make($request->all(), [
                 'name' => 'sometimes|required|string|max:255',
                 'content' => 'sometimes|required|string',
                 'description' => 'nullable|string',
-                'categori_id' => 'nullable|integer|exists:categori_posts,id',
-                'image' => 'nullable|string',
+                'categori_id' => 'sometimes|required|integer|exists:categori_posts,id',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
                 'image_url' => 'nullable|string',
                 'status' => 'nullable|in:draft,published,archived',
                 'tags' => 'nullable|string',
             ]);
+            if ($validated->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => $validated->errors()->toArray(),
+                ], 422);
+            }
+            $data = $validated->validated();
+            $uploadedImagePath = null;
+            if ($request->hasFile('image')) {
+                Storage::disk('public')->makeDirectory('images/post');
+                Storage::disk('public')->makeDirectory('images/post/thumbnail');
+                if ($post->image) {
+                    Storage::disk('public')->delete('images/post/'.$post->image);
+                    Storage::disk('public')->delete('images/post/thumbnail/'.$post->image);
+                }
+                $imageName = time().'_'.uniqid().'.'.$request->file('image')->extension();
+                $original = file_get_contents($request->file('image')->getRealPath());
+                Storage::disk('public')->put('images/post/'.$imageName, $original);
+                $img = Image::read($request->file('image')->getRealPath());
+                $img->resize(300, 200, function ($constraint) {
+                    $constraint->aspectRatio();
+                    $constraint->upsize();
+                });
+                Storage::disk('public')->put('images/post/thumbnail/'.$imageName, $img->encode());
+                $uploadedImagePath = 'images/post/'.$imageName;
+            }
 
-            if (array_key_exists('name', $validated)) {
-                $post->name = $validated['name'];
-                $post->slug = \Illuminate\Support\Str::slug($validated['name']);
-            }
-            if (array_key_exists('content', $validated)) {
-                $post->content = $validated['content'];
-            }
-            if (array_key_exists('description', $validated)) {
-                $post->description = $validated['description'];
-            }
-            if (array_key_exists('categori_id', $validated)) {
-                $post->categori_id = $validated['categori_id'];
-            }
-            if (array_key_exists('image', $validated)) {
-                $post->image = $validated['image'];
-            }
-            if (array_key_exists('image_url', $validated)) {
-                $post->image_url = $validated['image_url'];
-            }
-            if (array_key_exists('status', $validated)) {
-                $post->status = $validated['status'];
-            }
-            if (array_key_exists('tags', $validated)) {
-                $post->tags = $validated['tags'];
-            }
-
-            $post->save();
+            $post->update([
+                'name' => $data['name'] ?? $post->name,
+                'slug' => Str::slug($data['name'] ?? $post->name),
+                'content' => $data['content'] ?? $post->content,
+                'description' => $data['description'] ?? $post->description,
+                'categori_id' => $data['categori_id'] ?? $post->categori_id,
+                'image' => $uploadedImagePath ? basename($uploadedImagePath) : $post->image,
+                'image_url' => $uploadedImagePath ?? ($data['image_url'] ?? $post->image_url),
+                'status' => $data['status'] ?? $post->status,
+                'tags' => $data['tags'] ?? $post->tags,
+            ]);
 
             return response()->json([
                 'message' => 'Post updated successfully',
-                'data' => $post,
+                'data' => $this->formatResponse($post),
             ], 200);
-        } catch (\Illuminate\Validation\ValidationException $ve) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $ve->errors(),
-            ], 422);
         } catch (\Throwable $th) {
             return response()->json([
-                'message' => 'Server error: ' . $th->getMessage(),
+                'message' => 'Server error: '.$th->getMessage(),
             ], 500);
         }
     }
@@ -267,18 +290,19 @@ class PostController extends Controller
         try {
             $auth = Auth::user();
             $post = Post::where('user_id', $auth->id)->find($id);
-            if (!$post) {
+            if (! $post) {
                 return response()->json([
                     'message' => 'Post not found',
                 ], 404);
             }
             $post->delete();
+
             return response()->json([
                 'message' => 'Post deleted successfully',
             ], 200);
         } catch (\Throwable $th) {
             return response()->json([
-                'message' => 'Server error: ' . $th->getMessage(),
+                'message' => 'Server error: '.$th->getMessage(),
             ], 500);
         }
     }
@@ -324,7 +348,7 @@ class PostController extends Controller
             ], 422);
         } catch (\Throwable $th) {
             return response()->json([
-                'message' => 'Server error: ' . $th->getMessage(),
+                'message' => 'Server error: '.$th->getMessage(),
             ], 500);
         }
     }
@@ -340,7 +364,14 @@ class PostController extends Controller
             'name' => $data->name,
             'slug' => $data->slug,
             'image' => $data->image,
-            'image_url' => $data->image_url,
+            // 'image_url' => $data->image_url,
+            'image_url' => $data->image
+                ? asset('storage/images/post/'.$data->image)
+                : (! empty($data->image_url)
+                    ? (Str::startsWith($data->image_url, ['http://', 'https://'])
+                        ? $data->image_url
+                        : asset('storage/'.$data->image_url))
+                    : null),
             'status' => $data->status,
             'views' => $data->views,
             'likes' => $data->likes,

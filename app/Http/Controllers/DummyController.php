@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 use Exception;
+use Illuminate\Support\Facades\Http;
 
 class DummyController extends Controller
 {
@@ -39,12 +38,13 @@ class DummyController extends Controller
     {
         return $this->fetchData("https://dummyjson.com/products/{$id}");
     }
+
     /**
      * Fetch posts from dummyjson.
      */
     public function dummyPosts()
     {
-        return $this->fetchData("https://dummyjson.com/posts");
+        return $this->fetchData('https://dummyjson.com/posts');
     }
 
     /**
@@ -54,6 +54,7 @@ class DummyController extends Controller
     {
         return $this->fetchData("https://dummyjson.com/posts/{$id}");
     }
+
     /**
      * Helper method to fetch data from external API.
      */
@@ -65,7 +66,7 @@ class DummyController extends Controller
             if ($response->failed()) {
                 return response()->json([
                     'message' => 'Failed to fetch data from external API',
-                    'error' => $response->body()
+                    'error' => $response->body(),
                 ], $response->status());
             }
 

@@ -3,15 +3,16 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
+
     protected $fillable = [
         'id',
         'uuid',
@@ -27,17 +28,27 @@ class User extends Authenticatable
     {
         return $this->hasMany(CategoriPost::class);
     }
+
     public function posts()
     {
         return $this->hasMany(Post::class);
     }
+
     public function comments()
     {
         return $this->hasMany(Comment::class);
     }
 
+    protected static function boot()
+    {
+        parent::boot();
 
-
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) str()->uuid();
+            }
+        });
+    }
 
     protected $hidden = [
         'password',

@@ -3,21 +3,18 @@
 namespace App\Providers;
 
 use Dedoc\Scramble\Scramble;
-use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Str;
-use Illuminate\Routing\Route;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\SecurityScheme;
-use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Support\Facades\Gate;
-use Laravel\Sanctum\PersonalAccessToken;
-use Laravel\Sanctum\Sanctum;
-use Illuminate\Auth\Events\Verified;
-use Illuminate\Auth\Events\EmailVerificationFailed;
 use Illuminate\Auth\Notifications\VerifyEmail;
+use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Routing\Route;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
+use Laravel\Sanctum\PersonalAccessToken;
+use Laravel\Sanctum\Sanctum;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -35,7 +32,6 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
 
-
         Scramble::routes(function (Route $route) {
             return Str::startsWith($route->uri, 'api/');
         });
@@ -45,18 +41,17 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
-
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
         VerifyEmail::toMailUsing(function (object $notifiable, string $url) {
             return (new MailMessage)
                 ->subject('Verifikasi Alamat Email Anda')
-                ->greeting('Halo ' . $notifiable->name . '!')
+                ->greeting('Halo '.$notifiable->name.'!')
                 ->line('Silakan klik tombol di bawah ini untuk memverifikasi alamat email Anda.')
-                ->line('Email: ' . $notifiable->email)
+                ->line('Email: '.$notifiable->email)
                 ->line('Link ini akan berakhir dalam 60 menit.')
                 ->action('Verifikasi Email', $url)
                 ->line('Jika Anda tidak membuat akun ini, abaikan email ini.')
-                ->salutation('Salam, Tim ' . config('app.name'));
+                ->salutation('Salam, Tim '.config('app.name'));
         });
         // VerifyEmail::createUrlUsing(function (object $notifiable) {
         //     $verifycationUrl = URL::temporarySignedRoute(

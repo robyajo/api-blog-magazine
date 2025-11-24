@@ -9,7 +9,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Post extends Model
 {
     use HasFactory, SoftDeletes;
+
     protected $table = 'posts';
+
     protected $fillable = [
         'id',
         'uuid',
@@ -39,5 +41,16 @@ class Post extends Model
     public function categori()
     {
         return $this->belongsTo(CategoriPost::class);
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) str()->uuid();
+            }
+        });
     }
 }

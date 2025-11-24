@@ -2,19 +2,16 @@
 
 namespace Database\Seeders;
 
-use App\Models\Post;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class PostSeeder extends Seeder
 {
     /**
      * Run the database seeds.
      */
-
     public function run(): void
     {
         ini_set('memory_limit', '512M');
@@ -31,7 +28,7 @@ class PostSeeder extends Seeder
         $batch = [];
 
         for ($i = 1; $i <= $total; $i++) {
-            $name = 'Generated Post ' . $i;
+            $name = 'Generated Post '.$i;
             $batch[] = [
                 'uuid' => (string) Str::uuid(),
                 'user_id' => 1,
@@ -48,8 +45,8 @@ class PostSeeder extends Seeder
                 'shares' => 0,
                 'favorites' => 0,
                 'tags' => 'tag1,tag2',
-                'content' => 'Generated content for ' . $name,
-                'description' => 'Generated description for ' . $name,
+                'content' => 'Generated content for '.$name,
+                'description' => 'Generated description for '.$name,
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
@@ -60,7 +57,7 @@ class PostSeeder extends Seeder
             }
         }
 
-        if (!empty($batch)) {
+        if (! empty($batch)) {
             DB::table('posts')->insert($batch);
         }
     }
